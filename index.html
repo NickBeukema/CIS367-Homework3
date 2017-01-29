@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="webgl-utils.js"></script>
+  <script src="shader-utils.js"></script>
+  <script src="render.js"></script>
+  <title>Maze</title>
+  <style>
+    #gen {
+      margin-left: 32px;
+    }
+  </style>
+</head>
+<body onload="main()">
+  <p>
+  Number of rows/columns: <input id="size" type="number" maxlength="3" value="10">
+    <button id="gen" type="button">Generate Maze</button>
+  </p>
+  <canvas id="gl-canvas" width="512" height="512"></canvas>
+  <div id="msg"></div>
+  <!-- Written by Nick Beukema -->
+</body>
+</html>
