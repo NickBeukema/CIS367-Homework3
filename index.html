@@ -14,11 +14,12 @@
 </head>
 <body onload="main()">
   <p>
-  Number of rows/columns: <input id="size" type="number" maxlength="3" value="10">
+  Number of rows: <input id="size" type="number" maxlength="3" value="10">
     <button id="gen" type="button">Generate Maze</button>
+    <button id="solve" type="button">Solve</button>
+    <span style="margin-left: 10px; display: inline-block;" id="msg"></span>
   </p>
-  <canvas id="gl-canvas" width="512" height="512"></canvas>
-  <div id="msg"></div>
+  <canvas id="gl-canvas" width="1300" height="650"></canvas>
   <!-- Written by Nick Beukema -->
 </body>
 </html>
