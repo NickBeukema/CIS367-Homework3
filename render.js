@@ -111,13 +111,14 @@ function generateMaze(x, y) {
 
   visted[current[0]][current[1]] = true;
 
+  // Begin recursive maze generation
   generateSquare(mazeArray, current, path, visted, 1);
   return mazeArray;
 }
 
 
 
-function generateSquare(mazeArray, current, path, visited, depth) {
+function generateSquare(mazeArray, current, path, visited) {
   let neighbors = findNeighbors(current, mazeArray, visited);
   if(neighbors.length === 0) { return -1; }
 
@@ -132,27 +133,27 @@ function generateSquare(mazeArray, current, path, visited, depth) {
   path.push([chosen[0], chosen[1]]);
   visited[chosen[0]][chosen[1]] = true;
 
-  generateSquare(mazeArray, [chosen[0], chosen[1]], path, visited, depth + 1);
+  generateSquare(mazeArray, [chosen[0], chosen[1]], path, visited);
 
   if(path.length === 1) {
     return 1;
   } else {
     path.pop();
-    backpropagate(mazeArray, current, path, visited, depth);
+    backpropagate(mazeArray, current, path, visited);
   }
 }
 
 
 
-function backpropagate(mazeArray, position, path, visited, depth) {
+function backpropagate(mazeArray, position, path, visited) {
   if(path.length === 1) { return 1; }
 
   let neighbors = findNeighbors(position, mazeArray, visited);
   if(neighbors.length === 0) {
     let backwardPosition = path.pop();
-    backpropagate(mazeArray, backwardPosition, path, visited, depth - 1);
+    backpropagate(mazeArray, backwardPosition, path, visited);
   } else {
-    generateSquare(mazeArray, position, path, visited, depth);
+    generateSquare(mazeArray, position, path, visited);
   }
 }
 
