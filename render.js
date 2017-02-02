@@ -61,6 +61,8 @@ function drawScene(x,y,prog) {
   let maze = gameMaze = generateMaze(x,y);
   let [start, finish] = [gameStart, gameEnd] = getEndPoints(maze);
 
+  // Pass an empty array as a solution, when first
+  // displayed
   displayMaze(maze, start, finish, [], prog);
 }
 
@@ -69,6 +71,8 @@ function drawScene(x,y,prog) {
 /* -----------------------
        Click Events
 -------------------------- */
+
+
 
 function solveClicked() {
   let sol = solveMaze();
@@ -97,11 +101,12 @@ function generateMaze(x, y) {
   let mazeArray = [];
   let visted = [];
 
+  // Initiate arrays that represent the maze
   for(let i=0; i<x; i++) {
     mazeArray.push([]);
     visted.push([]);
     for(let j=0; j<y; j++) {
-      mazeArray[i].push([1,1,1,1]); // Top, right, bottom, left
+      mazeArray[i].push([1,1,1,1]); // (Top, right, bottom, left)
       visted[i].push(false);
     }
   }
