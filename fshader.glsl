@@ -1,3 +1,4 @@
+/* Written by Nick Beukema */
 precision mediump float;
 
 // varying from rasterizer

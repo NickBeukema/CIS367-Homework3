@@ -1,3 +1,4 @@
+/* Written by Nick Beukema */
 /* attributes are supplied by JSCode */
 attribute vec2 vertexPos;
 attribute vec4 vertexCol;
