@@ -10,20 +10,36 @@ var gl;
 var sizeInput, outMessage;
 let mazeWidth;
 let mazeHeight;
-let prog;
 let canvas;
-
-let green = [232.0/255.0, 232.0/255.0, 67.0/255.0, 1.0];
-let yellow = [33.0/255.0, 186.0/255.0, 27.0/255.0, 1.0];
-let blue = [0.0, 101.0/255.0, 164.0/255.0, 1.0];
-let red = [232.0/255.0, 70.0/255.0, 67.0/255.0, 1.0];
-
-let gameStart, gameEnd, gameMaze;
 
 const TOP = 0;
 const RIGHT = 1;
 const BOTTOM = 2;
 const LEFT = 3;
+
+// Colors
+let green = [232.0/255.0, 232.0/255.0, 67.0/255.0, 1.0];
+let yellow = [33.0/255.0, 186.0/255.0, 27.0/255.0, 1.0];
+let blue = [0.0, 101.0/255.0, 164.0/255.0, 1.0];
+let red = [232.0/255.0, 70.0/255.0, 67.0/255.0, 1.0];
+
+// Data for maze
+let gameStart, gameEnd, gameMaze;
+let percentPerCell;
+let hasSolution;
+
+// Draw buffers
+let mazeLinesBuffer, mazeLinesColorBuffer;
+let solutionLinesBuffer, solutionLinesColorBuffer;
+let startCircleBuffer, startCircleColorBuffer;
+let endCircleBuffer, endCircleColorBuffer;
+
+// Counts for drawing
+let mazeLineVertexCount, solutionLineVertexCount;
+let circleVertexCount;
+
+// Shader variable pointers
+let posAttr, colAttr;
 
 
 
@@ -45,26 +61,147 @@ function main() {
   let solveButton = document.getElementById("solve");
   solveButton.addEventListener("click", solveClicked);
 
-  ShaderUtils.loadFromFile(gl, "vshader.glsl", "fshader.glsl")
-  .then (program => {
-    gl.useProgram(program);
-    prog = program;
+  createBuffers();
+  generateAllComponents(20,10);
 
-    drawScene(20,10, prog);
+  ShaderUtils.loadFromFile(gl, "vshader.glsl", "fshader.glsl")
+  .then (prog => {
+
+    gl.useProgram(prog);
+
+    posAttr = gl.getAttribLocation(prog, 'vertexPos');
+    colAttr = gl.getAttribLocation(prog, 'vertexCol');
+
+    gl.enableVertexAttribArray(posAttr);
+    gl.enableVertexAttribArray(colAttr);
+
+    render();
   });
 
 }
 
 
 
-function drawScene(x,y,prog) {
+/* -----------------------
+  Drawing Prep Functions
+-------------------------- */
+
+
+
+function createBuffers() {
+  mazeLinesBuffer = gl.createBuffer();
+  mazeLinesColorBuffer = gl.createBuffer();
+
+  solutionLinesBuffer = gl.createBuffer();
+  solutionLinesColorBuffer = gl.createBuffer();
+
+  startCircleBuffer = gl.createBuffer();
+  startCircleColorBuffer = gl.createBuffer();
+
+  endCircleBuffer = gl.createBuffer();
+  endCircleColorBuffer = gl.createBuffer();
+}
+
+function render() {
+  drawScene();
+  requestAnimationFrame(render);
+}
+
+
+function generateAllComponents(x,y) {
   let maze = gameMaze = generateMaze(x,y);
+
+  let XPercentPerCell = ((mazeWidth / x) / mazeWidth ) * 2;
+  let YPercentPerCell = ((mazeHeight / y) / mazeHeight ) * 2;
+
+  percentPerCell = [XPercentPerCell, YPercentPerCell];
+
+  hasSolution = false;
+  generateMazeLineComponents(maze);
+
   let [start, finish] = [gameStart, gameEnd] = getEndPoints(maze);
 
-  // Pass an empty array as a solution, when first
-  // displayed
-  displayMaze(maze, start, finish, [], prog);
+  let startCircle = generateCircle(start, yellow, startCircleBuffer, startCircleColorBuffer);
+  let endCircle = generateCircle(finish, green, endCircleBuffer, endCircleColorBuffer);
+
+  circleVertexCount = startCircle.verticies.length / 2;
 }
+
+
+function generateCircle(position, color, pBuff, cBuff) {
+  let halfCell = [percentPerCell[0] / 2, percentPerCell[1] / 2];
+  let radius = [halfCell[0] / 3, halfCell[1] / 3];
+
+  let center = [((position[0] * percentPerCell[0]) + halfCell[0]) - 1, ((position[1] * percentPerCell[1]) + halfCell[1]) - 1];
+
+  let verticies = [...center];
+  let colors = [...color]
+
+  for (i = 0; i <= 200; i++){
+    verticies.push(
+      center[0] + (radius[0]*Math.cos(i*2*Math.PI/200)),
+      center[1] + (radius[1]*Math.sin(i*2*Math.PI/200))
+    );
+    colors.push(...color, ...color);
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, pBuff);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(verticies), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(colors), gl.STATIC_DRAW);
+
+  return { verticies: verticies, colors: colors, pBuff: pBuff, cBuff: cBuff };
+
+}
+
+
+function generateSolution() {
+  let solution = solveMaze();
+
+  let solutionLineVerticies = [];
+  let solutionLineColors = [];
+  let halfCell = [percentPerCell[0] / 2, percentPerCell[1] / 2];
+  for(i=0;i<solution.length;i++) {
+    let pos = solution[i];
+    let vertex = [((pos[0] * percentPerCell[0]) + halfCell[0]) - 1, ((pos[1] * percentPerCell[1]) + halfCell[1]) - 1];
+    solutionLineVerticies.push(...vertex);
+    solutionLineColors.push(...red,...red);
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, solutionLinesBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(solutionLineVerticies), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, solutionLinesColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(solutionLineColors), gl.STATIC_DRAW);
+  solutionLineVertexCount = solutionLineVerticies.length / 2;
+
+  hasSolution = true;
+}
+
+
+function generateMazeLineComponents(maze) {
+  let mazeLineVerticies = [];
+  let mazeLineColors = [];
+
+  for(let i=0; i<maze.length; i++) {
+    for(let j=0; j<maze[0].length; j++) {
+      let cell = maze[i][j];
+      mazeLineVerticies.push(...generateCell(i, j, cell));
+      for(z=0;z<8;z++) {
+        mazeLineColors.push(...blue);
+      }
+    }
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, mazeLinesBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(mazeLineVerticies), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, mazeLinesColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(mazeLineColors), gl.STATIC_DRAW);
+  mazeLineVertexCount = mazeLineVerticies.length / 2;
+}
+
 
 
 
@@ -75,8 +212,7 @@ function drawScene(x,y,prog) {
 
 
 function solveClicked() {
-  let sol = solveMaze();
-  displayMaze(gameMaze, gameStart, gameEnd, sol, prog);
+  generateSolution();
 }
 
 function buttonClicked() {
@@ -85,9 +221,11 @@ function buttonClicked() {
     outMessage.innerHTML = "Must set size in the input box";
   } else if(sz >= 50) {
     outMessage.innerHTML = "Let's try a number less than 50.";
+  } else if(sz < 1) {
+    outMessage.innerHTML = "Let's try a number greater than 0.";
   } else {
     outMessage.innerHTML = "I have to generate a maze of size " + sz * 2 + "x" + sz;
-    drawScene(sz*2,sz,prog);
+    generateAllComponents(sz*2,sz);
   }
 }
 
@@ -226,179 +364,46 @@ function getEndPoints(maze) {
 -------------------------- */
 
 
-
-function displayMaze(maze, start, finish, solution, prog) {
+function drawScene() {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  let x = maze.length;
-  let y = maze[0].length;
-
-  let XPercentPerCell = ((mazeWidth / x) / mazeWidth ) * 2;
-  let YPercentPerCell = ((mazeHeight / y) / mazeHeight ) * 2;
-
-  let percentPerCell = [XPercentPerCell, YPercentPerCell];
-
-  drawMazeLines(maze, percentPerCell, prog);
-  drawSolution(solution, percentPerCell, prog);
-  drawStartAndFinish(maze, percentPerCell, start, finish, prog);
+  drawMazeLines();
+  drawSolution();
+  drawStartAndFinish();
 }
 
 
 
-function drawSolution(solution, percentPerCell, prog) {
-  let verticies = [];
-  let colors = [];
-  let halfCell = [percentPerCell[0] / 2, percentPerCell[1] / 2];
-  for(i=0;i<solution.length;i++) {
-    let pos = solution[i];
-    let vertex = [((pos[0] * percentPerCell[0]) + halfCell[0]) - 1, ((pos[1] * percentPerCell[1]) + halfCell[1]) - 1];
-    verticies.push(...vertex);
-    colors.push(...red,...red);
-  }
+function drawSolution() {
+  if(!hasSolution) { return; }
 
-  let length = (verticies.length/2);
-  let vertexBuff = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuff);
-
-  // copy the verticies data
-  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(verticies), gl.STATIC_DRAW);
-
-  let startPosAttr = gl.getAttribLocation(prog, "vertexPos");
-  gl.enableVertexAttribArray(startPosAttr);
-
-
-  let cBuff = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
-  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(colors), gl.STATIC_DRAW);
-
-  let colAttr = gl.getAttribLocation(prog, "vertexCol");
-  gl.enableVertexAttribArray(colAttr);
-
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuff);
-  gl.vertexAttribPointer(startPosAttr,
+  gl.bindBuffer(gl.ARRAY_BUFFER, solutionLinesBuffer);
+  gl.vertexAttribPointer(posAttr,
       2,         /* number of components per attribute, in our case (x,y) */
       gl.FLOAT,  /* type of each attribute */
       false,     /* does not require normalization */
       0,         /* stride: number of bytes between the beginning of consecutive attributes */
       0);        /* the offset (in bytes) to the first component in the attribute array */
 
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
+  gl.bindBuffer(gl.ARRAY_BUFFER, solutionLinesColorBuffer);
   gl.vertexAttribPointer(colAttr, 4, gl.FLOAT, false, 0, 0);
 
-
-  gl.drawArrays(gl.LINE_STRIP,
-      0,  /* starting index in the array */
-      length
-  );
+  gl.drawArrays(gl.LINE_STRIP, 0, solutionLineVertexCount);
 }
 
 
 
-function drawStartAndFinish(maze, percentPerCell, start, finish, prog) {
-  let halfCell = [percentPerCell[0] / 2, percentPerCell[1] / 2];
-  let startCenter = [((start[0] * percentPerCell[0]) + halfCell[0]) - 1, ((start[1] * percentPerCell[1]) + halfCell[1]) - 1];
-  let endCenter = [((finish[0] * percentPerCell[0]) + halfCell[0]) - 1, ((finish[1] * percentPerCell[1]) + halfCell[1]) - 1];
-
-
-  let r1 = halfCell[0] / 3;
-  let r2 = halfCell[1] / 3;
-  drawCircle(startCenter, [r1,r2], green);
-  drawCircle(endCenter, [r1,r2], yellow);
+function drawStartAndFinish() {
+  drawCircle(startCircleBuffer, startCircleColorBuffer, circleVertexCount);
+  drawCircle(endCircleBuffer, endCircleColorBuffer, circleVertexCount);
 }
 
 
 
-function drawCircle(center, radius, color) {
-
-  let verticies = [...center];
-  let colors = [...color]
-
-  for (i = 0; i <= 200; i++){
-    verticies.push(
-      center[0] + (radius[0]*Math.cos(i*2*Math.PI/200)),
-      center[1] + (radius[1]*Math.sin(i*2*Math.PI/200))
-    );
-    colors.push(...color, ...color);
-  }
-
-  let length = (verticies.length/2);
-  let vertexBuff = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuff);
-
-  // copy the verticies data
-  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(verticies), gl.STATIC_DRAW);
-
-  let startPosAttr = gl.getAttribLocation(prog, "vertexPos");
-  gl.enableVertexAttribArray(startPosAttr);
-
-  let cBuff = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
-  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(colors), gl.STATIC_DRAW);
-
-  let colAttr = gl.getAttribLocation(prog, "vertexCol");
-  gl.enableVertexAttribArray(colAttr);
-
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuff);
-  gl.vertexAttribPointer(startPosAttr,
-      2,         /* number of components per attribute, in our case (x,y) */
-      gl.FLOAT,  /* type of each attribute */
-      false,     /* does not require normalization */
-      0,         /* stride: number of bytes between the beginning of consecutive attributes */
-      0);        /* the offset (in bytes) to the first component in the attribute array */
-
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
-  gl.vertexAttribPointer(colAttr, 4, gl.FLOAT, false, 0, 0);
-
-
-  gl.drawArrays(gl.TRIANGLE_FAN,
-      0,  /* starting index in the array */
-      length
-  );
-}
-
-
-
-function drawMazeLines(maze, percentPerCell, prog) {
-  let verticies = [];
-  let colors = [];
-
-  for(let i=0; i<maze.length; i++) {
-    for(let j=0; j<maze[0].length; j++) {
-      let cell = maze[i][j];
-      verticies.push(...generateCell(i, j, cell, percentPerCell));
-      for(z=0;z<8;z++) {
-        colors.push(...blue);
-      }
-    }
-  }
-
-  let length = (verticies.length/2);
-  let vertexBuff = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuff);
-
-  // copy the verticies data
-  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(verticies), gl.STATIC_DRAW);
-
-
-  let cBuff = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
-  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(colors), gl.STATIC_DRAW);
-
-
-  let posAttr = gl.getAttribLocation(prog, "vertexPos");
-  gl.enableVertexAttribArray(posAttr);
-
-  let colAttr = gl.getAttribLocation(prog, "vertexCol");
-  gl.enableVertexAttribArray(colAttr);
-
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuff);
+function drawCircle(pBuff, cBuff, vertexCount) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, pBuff);
   gl.vertexAttribPointer(posAttr,
       2,         /* number of components per attribute, in our case (x,y) */
       gl.FLOAT,  /* type of each attribute */
@@ -409,11 +414,24 @@ function drawMazeLines(maze, percentPerCell, prog) {
   gl.bindBuffer(gl.ARRAY_BUFFER, cBuff);
   gl.vertexAttribPointer(colAttr, 4, gl.FLOAT, false, 0, 0);
 
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, vertexCount);
+}
 
-  gl.drawArrays(gl.LINES,
-      0,  /* starting index in the array */
-      length
-  );
+
+
+function drawMazeLines() {
+  gl.bindBuffer(gl.ARRAY_BUFFER, mazeLinesBuffer);
+  gl.vertexAttribPointer(posAttr,
+      2,         /* number of components per attribute, in our case (x,y) */
+      gl.FLOAT,  /* type of each attribute */
+      false,     /* does not require normalization */
+      0,         /* stride: number of bytes between the beginning of consecutive attributes */
+      0);        /* the offset (in bytes) to the first component in the attribute array */
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, mazeLinesColorBuffer);
+  gl.vertexAttribPointer(colAttr, 4, gl.FLOAT, false, 0, 0);
+
+  gl.drawArrays(gl.LINES, 0, mazeLineVertexCount);
 }
 
 
@@ -445,7 +463,7 @@ function findNeighbors(position, mazeArray, visited, respectWalls) {
 
 
 
-function getVertexPositions(x, y, percentPerCell) {
+function getVertexPositions(x, y) {
   let topLeft = [(x * percentPerCell[0]) - 1, (y * percentPerCell[1]) - 1];
   let topRight = [((x + 1) * percentPerCell[0]) - 1, (y * percentPerCell[1]) - 1];
   let bottomRight = [((x + 1) * percentPerCell[0]) - 1, ((y + 1) * percentPerCell[1]) - 1];
@@ -460,12 +478,9 @@ function getVertexPositions(x, y, percentPerCell) {
 }
 
 
-
-function generateCell(x, y, cell, percentPerCell) {
+function generateCell(x, y, cell) {
   let verticiesToDraw = [];
-
-  let positions = getVertexPositions(x,y,percentPerCell);
-
+  let positions = getVertexPositions(x,y);
 
   for(let i=0; i<4; i++) {
     if(cell[i] === 1) {
@@ -475,4 +490,3 @@ function generateCell(x, y, cell, percentPerCell) {
 
   return verticiesToDraw;
 }
-
